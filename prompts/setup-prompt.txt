@@ -2,9 +2,9 @@ Help me build Life Planner: hold a button, speak, release, and add calendar
 entries through Home Assistant. Keep this first version simple.
 
 Project files:
-https://github.com/YOUR_GITHUB_USERNAME/YOUR_REPOSITORY/tree/YOUR_RELEASE_TAG
+https://github.com/kriya-edu/life-planner/tree/v0.1.1
 Raw base URL:
-https://raw.githubusercontent.com/kriya-edu/life-planner/v0.1.0
+https://raw.githubusercontent.com/kriya-edu/life-planner/v0.1.1
 
 Keep the first reply short: ask only which ESP board I have and whether
 Home Assistant is already running. Ask other questions when that stage needs

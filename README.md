@@ -9,11 +9,11 @@ View events on a native calendar card and results in a Home Assistant notice.
 
 Copy [prompts/setup-prompt.txt](prompts/setup-prompt.txt) into your setup chat.
 The assistant asks about your parts, AI provider, calendar and speech services,
-then adapts the files. Use [v0.1.0](https://github.com/kriya-edu/life-planner/tree/v0.1.0)
+then adapts the files. Use [v0.1.1](https://github.com/kriya-edu/life-planner/tree/v0.1.1)
 for matching firmware, scripts and prompts.
 
 Direct setup prompt:
-https://raw.githubusercontent.com/kriya-edu/life-planner/v0.1.0/prompts/setup-prompt.txt
+https://raw.githubusercontent.com/kriya-edu/life-planner/v0.1.1/prompts/setup-prompt.txt
 
 The calendar and prompt files are generic templates. The ESPHome file is a
 hardware-specific reference, not universal firmware. Confirm parts and adapt
