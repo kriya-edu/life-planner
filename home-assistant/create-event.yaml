@@ -1,0 +1,131 @@
+# Individual script config. Install as script.life_planner_create_event.
+# Replace calendar.life_planner with the confirmed writable calendar.
+# Add read-only availability calendars to calendar_entities, in this file
+# AND read-calendar.yaml. They must not become create_event targets.
+alias: Life Planner Create Event
+description: Create one timed event after checking conflicts and exact same-day duplicates.
+mode: queued
+max: 10
+fields:
+  summary:
+    description: Short actionable event title.
+    required: true
+    selector:
+      text: {}
+  start_date_time:
+    description: Future ISO 8601 start including timezone offset.
+    required: true
+    selector:
+      text: {}
+  end_date_time:
+    description: ISO 8601 end including timezone offset, after start.
+    required: true
+    selector:
+      text: {}
+  notes:
+    description: Optional context for the event description.
+    default: ''
+    selector:
+      text:
+        multiline: true
+sequence:
+  - variables:
+      calendar_entities:
+        - calendar.life_planner
+      title: "{{ summary | default('', true) | trim }}"
+      start_ts: "{{ as_timestamp(start_date_time | default(''), 0) }}"
+      end_ts: "{{ as_timestamp(end_date_time | default(''), 0) }}"
+  - if:
+      - condition: template
+        value_template: >-
+          {{ title == '' or start_ts <= as_timestamp(now()) or end_ts <= start_ts
+             or not (start_date_time | default('') | regex_search('(Z|[+-][0-9]{2}:[0-9]{2})$'))
+             or not (end_date_time | default('') | regex_search('(Z|[+-][0-9]{2}:[0-9]{2})$')) }}
+    then:
+      - stop: A title and future timezone-aware start/end datetimes are required.
+        error: true
+  - variables:
+      day_start: "{{ as_local(as_datetime(start_date_time)).replace(hour=0, minute=0, second=0, microsecond=0).isoformat() }}"
+      day_end: "{{ (as_local(as_datetime(end_date_time)).replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)).isoformat() }}"
+  - action: calendar.get_events
+    target:
+      entity_id: "{{ calendar_entities }}"
+    data:
+      start_date_time: "{{ day_start }}"
+      end_date_time: "{{ day_end }}"
+    response_variable: appointments
+  - if:
+      - condition: template
+        value_template: >-
+          {% set ns = namespace(missing=false) %}
+          {% for entity in calendar_entities %}
+            {% if entity not in appointments or 'events' not in appointments[entity] %}
+              {% set ns.missing = true %}
+            {% endif %}
+          {% endfor %}
+          {{ ns.missing }}
+    then:
+      - stop: Calendar availability could not be read. Nothing was saved.
+        error: true
+  - variables:
+      duplicate: >-
+        {% set ns = namespace(found=false) %}
+        {% for event in appointments['calendar.life_planner']['events'] %}
+          {% if (event.summary | default('') | trim | lower) == (title | lower) %}
+            {% set ns.found = true %}
+          {% endif %}
+        {% endfor %}
+        {{ ns.found }}
+      conflict: >-
+        {% set ns = namespace(found=false) %}
+        {% for entity in calendar_entities %}
+          {% for event in appointments[entity]['events'] %}
+            {% if event.start | length > 10 and event.end | length > 10 %}
+              {% if as_timestamp(event.start, 0) < end_ts and as_timestamp(event.end, 0) > start_ts %}
+                {% set ns.found = true %}
+              {% endif %}
+            {% endif %}
+          {% endfor %}
+        {% endfor %}
+        {{ ns.found }}
+  - if:
+      - condition: template
+        value_template: "{{ duplicate }}"
+    then:
+      - variables:
+          result:
+            success: true
+            saved: false
+            already_exists: true
+            message: An event with this title already exists in the requested date range. No duplicate created.
+      - stop: Existing event retained.
+        response_variable: result
+  - if:
+      - condition: template
+        value_template: "{{ conflict }}"
+    then:
+      - variables:
+          result:
+            success: false
+            saved: false
+            conflict: true
+            message: This time overlaps a timed event. Read the calendar and choose another free slot.
+      - stop: Time is occupied. Nothing was saved.
+        response_variable: result
+  - action: calendar.create_event
+    target:
+      entity_id: calendar.life_planner
+    data:
+      summary: "{{ title }}"
+      start_date_time: "{{ start_date_time }}"
+      end_date_time: "{{ end_date_time }}"
+      description: "{{ notes | default('', true) }}"
+  - variables:
+      result:
+        success: true
+        saved: true
+        summary: "{{ title }}"
+        start: "{{ start_date_time }}"
+        end: "{{ end_date_time }}"
+  - stop: Calendar create action completed.
+    response_variable: result

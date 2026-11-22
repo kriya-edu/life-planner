@@ -1,0 +1,287 @@
+# Hardware: Adafruit HUZZAH32 (ESP32-WROOM-32E).
+# Standard I2S microphone; confirm its model before wiring.
+# Status uses the board's built-in red LED on GPIO13.
+# Reference hardware only: adapt board, pins and microphone before use.
+# See ../README.md. The release handler uses ESPHome APIs: validate on your version.
+substitutions:
+  device_name: life-planner
+  friendly_name: Life Planner
+  button_pin: GPIO27
+  led_pin: GPIO13
+  mic_ws_pin: GPIO25
+  mic_bclk_pin: GPIO14
+  mic_data_pin: GPIO32
+
+esphome:
+  name: ${device_name}
+  friendly_name: ${friendly_name}
+  min_version: 2026.11.0
+
+esp32:
+  board: featheresp32
+  flash_size: 4MB
+  framework:
+    type: esp-idf
+
+logger:
+
+api:
+  encryption:
+    key: !secret life_planner_api_key
+
+ota:
+  - platform: esphome
+    encryption:
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+i2s_audio:
+  - id: mic_bus
+    i2s_lrclk_pin: ${mic_ws_pin}
+    i2s_bclk_pin: ${mic_bclk_pin}
+
+microphone:
+  - platform: i2s_audio
+    id: calendar_mic
+    i2s_audio_id: mic_bus
+    adc_type: external
+    i2s_din_pin: ${mic_data_pin}
+    pdm: false
+    channel: left
+    sample_rate: 16000
+    bits_per_sample: 32bit
+
+output:
+  - platform: gpio
+    id: button_led_output
+    pin: ${led_pin}
+
+light:
+  - platform: binary
+    id: button_led
+    internal: true
+    output: button_led_output
+    restore_mode: ALWAYS_OFF
+    effects:
+      - strobe:
+          name: Processing
+          colors:
+            - state: true
+              duration: 300ms
+            - state: false
+              duration: 300ms
+
+globals:
+  - id: session_active
+    type: bool
+    restore_value: false
+    initial_value: 'false'
+  - id: recording_started
+    type: bool
+    restore_value: false
+    initial_value: 'false'
+  - id: accepted_press
+    type: bool
+    restore_value: false
+    initial_value: 'false'
+  - id: waiting_previous_end
+    type: bool
+    restore_value: false
+    initial_value: 'false'
+  - id: previous_run_pending
+    type: bool
+    restore_value: false
+    initial_value: 'false'
+
+script:
+  - id: clear_session
+    mode: restart
+    then:
+      - script.stop: begin_recording
+      - script.stop: session_timeout
+      - globals.set:
+          id: waiting_previous_end
+          value: 'false'
+      - globals.set:
+          id: session_active
+          value: 'false'
+      - globals.set:
+          id: recording_started
+          value: 'false'
+      - globals.set:
+          id: accepted_press
+          value: 'false'
+      - light.turn_off: button_led
+  - id: begin_recording
+    mode: single
+    then:
+      # Normal presses start immediately. Drain completion only when an
+      # earlier request has not ended, so its late RUN_END cannot stop us.
+      - if:
+          condition:
+            lambda: return id(previous_run_pending) || id(calendar_voice).is_running();
+          then:
+            - globals.set:
+                id: waiting_previous_end
+                value: 'true'
+            - lambda: |-
+                auto *client = id(calendar_voice).get_api_connection();
+                if (id(calendar_voice).is_running()) {
+                  id(calendar_voice).request_stop();
+                } else if (client != nullptr) {
+                  esphome::api::VoiceAssistantRequest cancel_previous;
+                  cancel_previous.start = false;
+                  client->send_message(cancel_previous);
+                }
+            - wait_until:
+                condition:
+                  lambda: return !id(waiting_previous_end);
+                timeout: 1s
+            - globals.set:
+                id: waiting_previous_end
+                value: 'false'
+      - wait_until:
+          condition:
+            not:
+              voice_assistant.is_running:
+          timeout: 2s
+      - if:
+          condition:
+            and:
+              - binary_sensor.is_on: talk_button
+              - voice_assistant.connected:
+              - not:
+                  voice_assistant.is_running:
+              - lambda: return id(session_active) && id(accepted_press);
+          then:
+            - globals.set:
+                id: previous_run_pending
+                value: 'true'
+            - voice_assistant.start:
+                silence_detection: false
+          else:
+            - script.execute: clear_session
+  - id: session_timeout
+    mode: restart
+    then:
+      # Recover from a stalled microphone or missing pipeline completion event.
+      - delay: 120s
+      - voice_assistant.stop:
+      - script.execute: clear_session
+
+voice_assistant:
+  id: calendar_voice
+  microphone:
+    microphone: calendar_mic
+    gain_factor: 4
+  use_wake_word: false
+  # Only illuminate steadily once the microphone is actually listening.
+  on_listening:
+    - if:
+        condition:
+          and:
+            - binary_sensor.is_on: talk_button
+            - lambda: return id(session_active);
+        then:
+          - globals.set:
+              id: recording_started
+              value: 'true'
+          - light.turn_on:
+              id: button_led
+              effect: none
+        else:
+          # Covers release while the pipeline was still starting up.
+          - voice_assistant.stop:
+  on_end:
+    # Acknowledge the old run before begin_recording starts the next one.
+    - globals.set:
+        id: previous_run_pending
+        value: 'false'
+    - if:
+        condition:
+          lambda: return id(waiting_previous_end);
+        then:
+          - globals.set:
+              id: waiting_previous_end
+              value: 'false'
+        else:
+          # One button hold is one request; never auto-listen for a reply.
+          - voice_assistant.stop:
+          - script.execute: clear_session
+  on_error:
+    - logger.log:
+        level: WARN
+        format: "Voice pipeline error: %s: %s"
+        args: ['code.c_str()', 'message.c_str()']
+    - script.execute: clear_session
+  on_client_disconnected:
+    - voice_assistant.stop:
+    - script.execute: clear_session
+
+binary_sensor:
+  - platform: gpio
+    id: talk_button
+    name: Talk Button
+    pin:
+      number: ${button_pin}
+      mode:
+        input: true
+        pullup: true
+      inverted: true
+    filters:
+      - delayed_on_off: 20ms
+    on_press:
+      - if:
+          condition:
+            and:
+              - voice_assistant.connected:
+              - lambda: return !id(session_active);
+          then:
+            - globals.set:
+                id: session_active
+                value: 'true'
+            - globals.set:
+                id: accepted_press
+                value: 'true'
+            - script.execute: session_timeout
+            - script.execute: begin_recording
+          else:
+            - logger.log: "Talk ignored: voice pipeline disconnected or busy."
+    on_release:
+      - if:
+          condition:
+            lambda: return id(session_active) && id(accepted_press);
+          then:
+            - globals.set:
+                id: accepted_press
+                value: 'false'
+            - if:
+                condition:
+                  lambda: return id(recording_started);
+                then:
+                  - light.turn_on:
+                      id: button_led
+                      effect: Processing
+                  - lambda: |-
+                      // Finish audio without voice_assistant.stop's abort request.
+                      auto *client = id(calendar_voice).get_api_connection();
+                      if (client == nullptr) {
+                        id(clear_session).execute();
+                        return;
+                      }
+                      esphome::api::VoiceAssistantAudio end_audio;
+                      end_audio.end = true;
+                      if (!client->send_message(end_audio)) {
+                        id(calendar_voice).request_stop();
+                        id(clear_session).execute();
+                        return;
+                      }
+                      esphome::api::VoiceAssistantEventResponse capture_finished;
+                      capture_finished.event_type = esphome::api::enums::VOICE_ASSISTANT_STT_VAD_END;
+                      id(calendar_voice).on_event(capture_finished);
+                else:
+                  # A tap released before listening is ready cancels startup.
+                  - voice_assistant.stop:
+                  - script.execute: clear_session

@@ -1,0 +1,81 @@
+Help me build Life Planner: hold a button, speak, release, and add calendar
+entries through Home Assistant. Keep this first version simple.
+
+Project files:
+https://github.com/YOUR_GITHUB_USERNAME/YOUR_REPOSITORY/tree/YOUR_RELEASE_TAG
+Raw base URL:
+https://raw.githubusercontent.com/kriya-edu/life-planner/v0.1.0
+
+Keep the first reply short: ask only which ESP board I have and whether
+Home Assistant is already running. Ask other questions when that stage needs
+them. Give one small actionable step at a time, explain unfamiliar terms,
+and wait for its result before proceeding. Avoid presenting the whole setup
+checklist as work I must complete at once.
+
+Start by asking what I have. Inspect connected Home Assistant information
+first, then ask only for missing facts in small groups:
+- Exact ESP board/chip/revision and microphone model or product links; button,
+  LED type, existing wiring, and ability to flash by USB.
+- Home Assistant host, installation type/version, ESPHome version, and which
+  speech-to-text/text-to-speech services and language already work.
+- Whether I already use Gemini or another AI agent, its model/integration,
+  and whether API credentials and tool access are configured. Never ask me
+  to paste keys into chat. If none exists, help me choose one compatible agent.
+- Calendar provider and entities, intended writable calendar, optional read-only
+  availability calendars, timezone, normal hours, and preferred task duration.
+
+Wait for answers before dependent decisions. Help identify unknown parts.
+Reuse compatible equipment and services. Explain an incompatibility before
+suggesting replacements. Summarize my confirmed setup before generating wiring.
+
+Fetch and inspect README.md, prompts/planner-instructions.txt,
+esphome/huzzah32-reference.yaml, esphome/secrets.yaml.example,
+home-assistant/read-calendar.yaml, home-assistant/create-event.yaml,
+home-assistant/report-status.yaml, and home-assistant/calendar-card.yaml.
+If a file is unavailable, identify it instead of inventing its contents.
+
+Use these as templates, adapting them to my setup:
+1. Confirm a calendar supports get_events and create_event; otherwise help
+   create a Local calendar through Home Assistant's integration UI.
+2. Replace calendar.life_planner with the actual writable entity everywhere.
+   Add chosen read-only calendar entities to calendar_entities in BOTH read
+   and create scripts. Never add those calendars to the write target.
+3. Install each script through a supported configuration API, or guide me to
+   create a separate script and use its YAML editor. Do not paste these
+   standalone script objects into configuration.yaml or edit .storage.
+   Use script.life_planner_read_calendar, script.life_planner_create_event,
+   script.life_planner_report_status, or map their actual generated IDs.
+4. Reuse/configure a dedicated agent with planner-instructions.txt, supported
+   tool access and only the needed exposed entities. Append my actual timezone
+   and preferences; retain a dynamically rendered current-time value. Verify
+   that my chosen integration renders that template, or provide equivalent
+   live time context. Map script names and test tool discovery/responses.
+5. Test a future event by text and read it back. Test a duplicate, an occupied
+   slot, a past time, and a status notice. Remove only named test events using
+   the calendar UI or a supported action, not a model deletion tool.
+6. Connect my existing compatible STT/TTS services in a dedicated Assist pipeline.
+   The reference firmware uses a pipeline including TTS despite having no
+   speaker: keep a compatible TTS provider selected and no playback hardware.
+7. Adapt the reference firmware to my exact supported board, microphone,
+   button and LED. Consult hardware docs. Generate a wiring table for my
+   actual parts, with pin numbers, voltage and LED polarity checked. Never
+   assume my board is a HUZZAH32 or my LED is on GPIO13. Preserve release-to-
+   end-audio without canceling transcription and the no-follow-up lifecycle.
+8. Create local secrets, validate and compile with a compatible ESPHome
+   version, flash over USB, pair the device, and select the dedicated pipeline.
+9. Add the native calendar-card.yaml to my dashboard with the actual entities.
+   Physically test hold, ready LED, speech, release, transcript, saved event,
+   status notice, and a second press after completion.
+
+Keep secrets local. Do not add extra project features. A calendar block is not
+an alarm or push reminder. Never claim validation or physical testing that
+was not performed. Finish with actual filenames/entity IDs and remaining issues.
+
+For the blog's three-step quick start, honor the current prompt's stage:
+1. Identify and confirm the setup only; do not install or modify yet.
+2. Connect calendar, AI, speech and firmware; verify a text event.
+3. Test physical voice capture and the saved event.
+Aim for about 15 minutes only when hardware and prerequisite services are
+already ready. If a prerequisite is missing, explain it and help with that
+one next step instead of promising the same timing. Keep internals out of
+the walkthrough unless needed to make a decision or fix the current failure.

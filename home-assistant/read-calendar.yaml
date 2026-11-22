@@ -1,0 +1,42 @@
+# Individual script config. Install as script.life_planner_read_calendar.
+# Edit calendar_entities here AND in create-event.yaml during setup.
+alias: Life Planner Read Calendar
+description: Read appointments before selecting a time for a spoken request.
+mode: parallel
+max: 5
+fields:
+  start_date_time:
+    description: ISO 8601 range start with an explicit timezone offset.
+    required: true
+    selector:
+      text: {}
+  end_date_time:
+    description: ISO 8601 range end with an explicit timezone offset.
+    required: true
+    selector:
+      text: {}
+sequence:
+  - variables:
+      calendar_entities:
+        - calendar.life_planner
+      start_ts: "{{ as_timestamp(start_date_time | default(''), 0) }}"
+      end_ts: "{{ as_timestamp(end_date_time | default(''), 0) }}"
+  - if:
+      - condition: template
+        value_template: "{{ start_ts <= 0 or end_ts <= start_ts }}"
+    then:
+      - stop: Provide valid start and end datetimes, with end after start.
+        error: true
+  - action: calendar.get_events
+    target:
+      entity_id: "{{ calendar_entities }}"
+    data:
+      start_date_time: "{{ start_date_time }}"
+      end_date_time: "{{ end_date_time }}"
+    response_variable: appointments
+  - variables:
+      result:
+        success: true
+        calendars: "{{ appointments }}"
+  - stop: Calendar read complete.
+    response_variable: result

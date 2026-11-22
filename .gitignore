@@ -1,0 +1,9 @@
+secrets.yaml
+.env
+.env.*
+!.env.example
+.esphome/
+__pycache__/
+*.bin
+*.elf
+.DS_Store

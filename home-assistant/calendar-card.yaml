@@ -1,0 +1,6 @@
+# One native dashboard card, not a complete dashboard.
+# Replace the entity with the confirmed writable calendar.
+type: calendar
+initial_view: listWeek
+entities:
+  - calendar.life_planner

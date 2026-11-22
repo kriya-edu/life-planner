@@ -1,0 +1,17 @@
+# Individual script config. Install as script.life_planner_report_status.
+alias: Life Planner Report Status
+description: Show a short result or problem when the device has no speaker.
+mode: queued
+max: 10
+fields:
+  message:
+    description: Short factual result, or explanation of what could not be saved.
+    required: true
+    selector:
+      text: {}
+sequence:
+  - action: persistent_notification.create
+    data:
+      notification_id: life_planner_status
+      title: Life Planner
+      message: "{{ message }}"
